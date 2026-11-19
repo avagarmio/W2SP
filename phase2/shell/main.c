@@ -47,6 +47,7 @@ static int redirect(const char *path, int flags, int change_fd){
     return 0;
 }
 
+
 int main(void)
 {
     char *commands = NULL;
@@ -84,6 +85,35 @@ int main(void)
             if(chdir(path) == -1){
                 perror("w2sp: cd");
             }
+            continue;
+        } else if(strcmp("export", args[0]) == 0){
+            if(args[1] == NULL) {
+                fprintf(stderr, "w2sp: export: usage: export NAME=value\n");
+                continue;
+            }
+
+            for(size_t i = 1; args[i] != NULL; ++i){
+                char *eq = strchr(args[i], '=');
+
+                if(eq == NULL){
+                    fprintf(stderr, "w2sp: export: <%s> has no value. Usage: export NAME=value\n", args[i]);
+                    continue;
+                }
+
+                if(args[i] == eq){
+                    fprintf(stderr, "w2sp: export: <%s> has no name. Usage: export NAME=value\n", args[i]);
+                    continue;
+                }
+
+                *eq = '\0';
+
+                if(setenv(args[i], eq+1, 1) == -1){
+                    perror("w2sp: export");
+                    continue;
+                }
+
+            }
+
             continue;
         }
 
@@ -142,12 +172,6 @@ int main(void)
         }
 
         if (pid == 0) {
-
-            // if(operator_type != 0){
-            //     int rc = redirect(redir_path, operator_type);
-                
-            // }
-            
             if(stdout_path != NULL){
                 int rc = redirect(stdout_path, REDIR_OUT, STDOUT_FILENO);
                 if(rc == -1){
