@@ -1,0 +1,1 @@
+/usr/bin/cc -g -fsanitize=address,undefined CMakeFiles/rb_test.dir/main.c.o -o rb_test  -Wl,-rpath,/home/avagarm/projects/W2SP/phase1/ringbuf/build libringbuf.so 

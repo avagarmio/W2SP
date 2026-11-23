@@ -1,0 +1,4 @@
+/home/avagarm/projects/W2SP/phase1/ringbuf/build/CMakeFiles/ringbuf.dir
+/home/avagarm/projects/W2SP/phase1/ringbuf/build/CMakeFiles/rb_test.dir
+/home/avagarm/projects/W2SP/phase1/ringbuf/build/CMakeFiles/edit_cache.dir
+/home/avagarm/projects/W2SP/phase1/ringbuf/build/CMakeFiles/rebuild_cache.dir
