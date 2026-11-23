@@ -2,3 +2,8 @@ gpt
 rb_test
 *.o
 *.d
+fork_demo
+wait_demo
+zombie_demo
+orphan_demo
+build/

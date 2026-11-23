@@ -1,1 +1,0 @@
-/usr/bin/cc -fPIC -g -fsanitize=address,undefined -shared -Wl,-soname,libringbuf.so -o libringbuf.so CMakeFiles/ringbuf.dir/ringbuf.c.o 
