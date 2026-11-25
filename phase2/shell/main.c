@@ -6,20 +6,20 @@
 #include <string.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #define MAX_ARGS 64
 
 
-enum redir { 
-    //REDIR_NONE,
-    REDIR_OUT = O_WRONLY | O_CREAT | O_TRUNC, 
-    REDIR_APPEND = O_WRONLY | O_CREAT | O_APPEND, 
-    REDIR_ERR = O_WRONLY | O_CREAT | O_TRUNC, 
+enum redir {
+    REDIR_OUT = O_WRONLY | O_CREAT | O_TRUNC,
+    REDIR_APPEND = O_WRONLY | O_CREAT | O_APPEND,
+    REDIR_ERR = O_WRONLY | O_CREAT | O_TRUNC,
     REDIR_IN = O_RDONLY
 };
 
 
-static int parse_line(char *line, char *args[], int max_args) 
+static int parse_line(char *line, char *args[], int max_args)
 {
     const char *delim = " \t";
     int count = 0;
@@ -40,10 +40,27 @@ static int redirect(const char *path, int flags, int change_fd){
     int fd = open(path, flags, 0644);
     if(fd == -1) return fd;
     if (dup2(fd, change_fd) == -1){
+        int saved_errno = errno;
         close(fd);
+        errno = saved_errno;
         return -1;
     }
     if(fd != change_fd) close(fd);
+    return 0;
+}
+
+
+static int wait_child(pid_t pid, int *status, const char *message){
+    pid_t result;
+
+    do {
+        result = waitpid(pid, status, 0);
+    } while (result == -1 && errno == EINTR);
+
+    if (result == -1){
+        perror(message);
+        return -1;
+    }
     return 0;
 }
 
@@ -72,11 +89,103 @@ int main(void)
         if (argc == 0)
             continue;
 
+        int pipe_pos = -1;
+        bool invalid_pipe = false;
+
+        for (int i = 0; i < argc; ++i) {
+            if (strcmp("|", args[i]) != 0)
+                continue;
+
+            if (i == 0 || i == argc - 1 || pipe_pos != -1) {
+                fprintf(stderr, "w2sp: invalid or unsupported pipeline\n");
+                invalid_pipe = true;
+                break;
+            }
+
+            pipe_pos = i;
+        }
+
+        if (invalid_pipe)
+            continue;
+
+        if (pipe_pos != -1) {
+            args[pipe_pos] = NULL;
+            char **right_command = &args[pipe_pos + 1];
+
+            int pipefd[2];
+            if (pipe(pipefd) == -1) {
+                perror("w2sp: pipe");
+                continue;
+            }
+
+            pid_t pid_left = fork();
+            if (pid_left == -1) {
+                perror("w2sp: fork left");
+                close(pipefd[0]);
+                close(pipefd[1]);
+                continue;
+            }
+
+            if (pid_left == 0) {
+                if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+                    perror("w2sp: dup2 stdout");
+                    _exit(1);
+                }
+                if (pipefd[0] != STDOUT_FILENO)
+                    close(pipefd[0]);
+                if (pipefd[1] != STDOUT_FILENO)
+                    close(pipefd[1]);
+
+                execvp(args[0], args);
+                perror("w2sp: execvp left");
+                _exit(127);
+            }
+
+            pid_t pid_right = fork();
+            if (pid_right == -1) {
+                perror("w2sp: fork right");
+                close(pipefd[0]);
+                close(pipefd[1]);
+                wait_child(pid_left, NULL, "w2sp: waitpid left");
+                continue;
+            }
+
+            if (pid_right == 0) {
+                if (dup2(pipefd[0], STDIN_FILENO) == -1) {
+                    perror("w2sp: dup2 stdin");
+                    _exit(1);
+                }
+                if (pipefd[0] != STDIN_FILENO)
+                    close(pipefd[0]);
+                if (pipefd[1] != STDIN_FILENO)
+                    close(pipefd[1]);
+
+                execvp(right_command[0], right_command);
+                perror("w2sp: execvp right");
+                _exit(127);
+            }
+
+            close(pipefd[0]);
+            close(pipefd[1]);
+
+            int status_left;
+            int status_right;
+            int left_result = wait_child(pid_left, &status_left, "w2sp: waitpid left");
+            int right_result = wait_child(pid_right, &status_right, "w2sp: waitpid right");
+
+            if (left_result == 0 && WIFSIGNALED(status_left))
+                printf("Left command killed by signal %d\n", WTERMSIG(status_left));
+            if (right_result == 0 && WIFSIGNALED(status_right))
+                printf("Right command killed by signal %d\n", WTERMSIG(status_right));
+
+            continue;
+        }
+
         if(strcmp("exit", args[0]) == 0){
             break;
         } else if(strcmp("cd", args[0]) == 0){
             char *path = (args[1] == NULL) ? getenv("HOME") : args[1];
-            
+
             if(path == NULL){
                 fprintf(stderr, "w2sp: cd: HOME not set\n");
                 continue;
@@ -111,7 +220,6 @@ int main(void)
                     perror("w2sp: export");
                     continue;
                 }
-
             }
 
             continue;
@@ -137,7 +245,6 @@ int main(void)
                 break;
             }
 
-            // char *path = args[i + 1];
             args[i] = NULL;
 
             if (strcmp(op, ">") == 0) {
@@ -176,39 +283,38 @@ int main(void)
                 int rc = redirect(stdout_path, REDIR_OUT, STDOUT_FILENO);
                 if(rc == -1){
                     perror("redirect");
-                    exit(1);
+                    _exit(1);
                 }
             }
             if(stdappend_path != NULL){
                 int rc = redirect(stdappend_path, REDIR_APPEND, STDOUT_FILENO);
                 if(rc == -1){
                     perror("redirect");
-                    exit(1);
+                    _exit(1);
                 }
             }
             if(stderr_path != NULL){
                 int rc = redirect(stderr_path, REDIR_ERR, STDERR_FILENO);
                 if(rc == -1){
                     perror("redirect");
-                    exit(1);
+                    _exit(1);
                 }
             }
             if(stdin_path != NULL){
                 int rc = redirect(stdin_path, REDIR_IN, STDIN_FILENO);
                 if(rc == -1){
                     perror("redirect");
-                    exit(1);
+                    _exit(1);
                 }
             }
 
             execvp(args[0], args);
             perror("execvp");
-            exit(127);
+            _exit(127);
         }
 
         int status;
-        if (waitpid(pid, &status, 0) == -1) {
-            perror("waitpid");
+        if (wait_child(pid, &status, "waitpid") == -1) {
             continue;
         }
 
