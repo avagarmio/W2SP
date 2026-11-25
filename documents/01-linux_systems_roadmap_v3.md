@@ -110,7 +110,7 @@ CMake, находишь в GDB причину падения по core dump, л�
 | 2.1 Файлы и I/O | `open/read/write/close`, `lseek`, `dup/dup2`, `/proc/<pid>/fd`, `umask` | ✅ |
 | | `errno` и обработка ошибок, частичная запись, `fcntl`, `O_CLOEXEC`, `stat`, каталоги | ✅ |
 | 2.2 Процессы | `fork`, `exec*`, `wait/waitpid`, зомби и сироты, окружение, коды завершения | ✅ |
-| 2.3 Пайпы и перенаправление | `pipe`, `dup2` в связке с `fork/exec`, FIFO | 🔄 в процессе |
+| 2.3 Пайпы и перенаправление | `pipe`, `dup2` в связке с `fork/exec`, FIFO | ✅ |
 | 2.4 Сигналы | `sigaction`, маски, `SIGCHLD`, async-signal-safety, `signalfd` | ⬜ |
 | 2.5 Группы процессов и терминал | process group, session, job control, `termios` | ⬜ |
 | 2.6 Мультиплексирование | неблокирующий I/O, `select/poll/epoll`, `eventfd`, `timerfd`, `inotify` | ⬜ |
